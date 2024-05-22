@@ -11,12 +11,48 @@ import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
+import java.util.Date;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+
+import chrisferdev.security.services.IJWTUtilityService;
+
 @Service
-public class JWTUtilityServiceImpl {
+public class JWTUtilityServiceImpl implements IJWTUtilityService{
+
+    @Value("classpath:jwtKeys/private_key.pem")
+    private Resource privateKeyResource;
+
+    @Value("classpath:jwtKeys/public_key.pem")
+    private Resource publicKeyResource;
+
+    @Override
+    public String generateJWT(Long userId) throws NoSuchAlgorithmException, InvalidKeySpecException, IOException, JOSEException{
+        PrivateKey privateKey = loadPrivateKey(privateKeyResource);
+
+        JWSSigner signer = new RSASSASigner(privateKey);
+
+        Date now = new Date();
+        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+                .subject(userId.toString())
+                .issueTime(now)
+                .expirationTime(new Date(now.getTime() + 14400000))
+                .build();
+
+        SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.RS256), claimsSet);
+        signedJWT.sign(signer);
+        return signedJWT.serialize();
+    }
 
     private PrivateKey loadPrivateKey(Resource resource) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException{
         byte[] keyBytes = Files.readAllBytes(Paths.get(resource.getURI()));
